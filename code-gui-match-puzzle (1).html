@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Code ↔ GUI Match | C# WinForms Puzzle</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+<!-- ============================================================
+     STYLE BLOCK
+     Purpose: All visual styling. Sections: tokens, layout,
+     level switch, draggable cards, drop targets, mock GUI,
+     feedback states, responsive rules.
+     ============================================================ -->
+<style>
+  :root{
+    --bg:#1e1f29;
+    --panel:#262837;
+    --panel-raised:#2e3142;
+    --line:#3a3d52;
+    --text:#e8e6f0;
+    --text-dim:#9d9fb5;
+    --accent:#5fd4c4;
+    --accent-dim:#3a8f84;
+    --amber:#e8a548;
+    --green:#7ed99c;
+    --red:#e8617a;
+    --mono:'JetBrains Mono', monospace;
+    --sans:'Inter', sans-serif;
+  }
+
+  *{box-sizing:border-box;}
+
+  body{
+    margin:0;
+    background:
+      radial-gradient(circle at 15% 0%, #2a2c3e 0%, transparent 45%),
+      var(--bg);
+    color:var(--text);
+    font-family:var(--sans);
+    min-height:100vh;
+    padding:28px 20px 60px;
+  }
+
+  /* ---------- HEADER ---------- */
+  .header{
+    max-width:1240px;
+    margin:0 auto 16px;
+    display:flex;
+    align-items:flex-end;
+    justify-content:space-between;
+    gap:20px;
+    flex-wrap:wrap;
+    border-bottom:1px solid var(--line);
+    padding-bottom:18px;
+  }
+  .header .eyebrow{
+    font-family:var(--mono);
+    font-size:12px;
+    color:var(--accent);
+    letter-spacing:.12em;
+    text-transform:uppercase;
+    margin:0 0 6px;
+  }
+  .header h1{
+    margin:0;
+    font-size:clamp(22px,3vw,30px);
+    font-weight:800;
+    letter-spacing:-0.02em;
+  }
+  .header p{
+    margin:6px 0 0;
+    color:var(--text-dim);
+    font-size:14px;
+    max-width:560px;
+  }
+  .scorebox{
+    font-family:var(--mono);
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:10px 18px;
+    text-align:center;
+    min-width:120px;
+  }
+  .scorebox .num{font-size:24px;font-weight:700;color:var(--accent);}
+  .scorebox .lbl{font-size:11px;color:var(--text-dim);letter-spacing:.08em;text-transform:uppercase;}
+
+  /* ---------- LEVEL SWITCH ---------- */
+  .level-switch{
+    max-width:1240px;
+    margin:0 auto 20px;
+    display:flex;
+    gap:10px;
+  }
+  .level-btn{
+    font-family:var(--mono);
+    font-size:13px;
+    font-weight:700;
+    letter-spacing:.04em;
+    background:var(--panel);
+    border:1px solid var(--line);
+    color:var(--text-dim);
+    padding:10px 18px;
+    border-radius:9px;
+    cursor:pointer;
+    transition:all .15s ease;
+  }
+  .level-btn .sub{display:block;font-family:var(--sans);font-weight:400;font-size:11px;margin-top:2px;}
+  .level-btn:hover{border-color:var(--accent-dim);color:var(--text);}
+  .level-btn.active{
+    background:linear-gradient(135deg, rgba(95,212,196,.18), rgba(95,212,196,.06));
+    border-color:var(--accent);
+    color:var(--accent);
+  }
+  .level-btn[data-level="hard"].active{
+    background:linear-gradient(135deg, rgba(232,97,122,.16), rgba(232,165,72,.08));
+    border-color:var(--amber);
+    color:var(--amber);
+  }
+
+  /* ---------- GAME GRID ---------- */
+  .game{
+    max-width:1240px;
+    margin:0 auto;
+    display:grid;
+    grid-template-columns:1fr 1.2fr;
+    gap:22px;
+    align-items:start;
+  }
+
+  .panel-title{
+    font-family:var(--mono);
+    font-size:12px;
+    color:var(--text-dim);
+    text-transform:uppercase;
+    letter-spacing:.1em;
+    margin:0 0 10px 2px;
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  .panel-title .dot{width:7px;height:7px;border-radius:50%;background:var(--accent);}
+
+  /* ---------- CODE CARDS (draggable) ---------- */
+  #codeBank{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:14px;
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+    min-height:200px;
+    max-height:78vh;
+    overflow-y:auto;
+  }
+  #codeBank::-webkit-scrollbar{width:8px;}
+  #codeBank::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px;}
+
+  .code-card{
+    background:var(--panel-raised);
+    border:1px solid var(--line);
+    border-left:3px solid var(--accent-dim);
+    border-radius:8px;
+    padding:10px 12px;
+    cursor:grab;
+    font-family:var(--mono);
+    font-size:12px;
+    line-height:1.55;
+    color:var(--text);
+    white-space:pre-wrap;
+    word-break:break-word;
+    transition:transform .15s ease, box-shadow .15s ease, border-color .15s ease, opacity .2s ease;
+    user-select:none;
+  }
+  .code-card:hover{
+    transform:translateY(-2px);
+    border-color:var(--accent);
+    box-shadow:0 6px 18px rgba(0,0,0,.35);
+  }
+  .code-card:active{cursor:grabbing;}
+  .code-card.dragging{opacity:.35;}
+  .code-card.placed{display:none;}
+  .code-card .kw{color:#c792ea;}
+  .code-card .str{color:var(--amber);}
+  .code-card .typ{color:var(--accent);}
+  .code-card .com{color:var(--text-dim);font-style:italic;}
+
+  #codeBank.empty::after{
+    content:"All snippets placed — nice work.";
+    font-family:var(--sans);
+    color:var(--text-dim);
+    font-size:13px;
+    text-align:center;
+    padding:30px 10px;
+  }
+
+  /* ---------- MOCK FORM (drop targets) ---------- */
+  .mockform{
+    background:#eef0f4;
+    border-radius:12px;
+    border:1px solid var(--line);
+    overflow:hidden;
+    box-shadow:0 14px 40px rgba(0,0,0,.4);
+  }
+  .titlebar{
+    background:#d7dce6;
+    color:#33394a;
+    font-size:13px;
+    font-weight:600;
+    padding:9px 14px;
+    display:flex;
+    align-items:center;
+    gap:8px;
+    border-bottom:1px solid #c2c8d6;
+  }
+  .titlebar .ico{width:10px;height:10px;border-radius:2px;background:linear-gradient(135deg,var(--accent),#3a8f84);}
+  .formbody{
+    padding:20px 22px 24px;
+    color:#1f2330;
+    font-family:var(--sans);
+    max-height:78vh;
+    overflow-y:auto;
+  }
+
+  .section-label{
+    font-family:var(--mono);
+    font-size:10.5px;
+    color:#8a90a3;
+    text-transform:uppercase;
+    letter-spacing:.08em;
+    margin:18px 0 6px;
+    border-top:1px dashed #d6dae3;
+    padding-top:10px;
+  }
+  .section-label:first-child{margin-top:0;border-top:none;padding-top:0;}
+
+  .field-row{display:flex;align-items:center;gap:14px;margin-bottom:10px;}
+  .field-row label{font-size:12.5px;font-weight:700;width:118px;flex-shrink:0;}
+  .field-row label.sub{font-weight:400;font-size:11px;color:#8a90a3;}
+
+  .drop-zone{
+    flex:1;
+    min-height:32px;
+    border:2px dashed #b9bfcd;
+    border-radius:6px;
+    background:#fff;
+    display:flex;
+    align-items:center;
+    padding:5px 10px;
+    font-family:var(--mono);
+    font-size:11.5px;
+    color:#9aa0b2;
+    transition:all .15s ease;
+    line-height:1.4;
+  }
+  .drop-zone.btn-zone{
+    flex:0 0 auto;
+    min-width:128px;
+    justify-content:center;
+    border-radius:5px;
+  }
+  .drop-zone.tall{min-height:56px;align-items:flex-start;padding-top:8px;}
+  .drop-zone.grid-zone{min-height:90px;align-items:flex-start;padding-top:10px;}
+  .drop-zone.over{border-color:var(--accent-dim);background:#e9fbf8;}
+  .drop-zone.correct{
+    border:2px solid var(--green);
+    background:#eafff1;
+    color:#1f7a4d;
+    font-weight:600;
+  }
+  .drop-zone.wrong-flash{
+    border-color:var(--red);
+    background:#ffe9ee;
+    animation:shake .35s ease;
+  }
+  @keyframes shake{
+    25%{transform:translateX(-4px);}
+    75%{transform:translateX(4px);}
+  }
+
+  .btn-row{display:flex;gap:12px;margin:6px 0 6px 132px;}
+
+  /* filled-in text once a zone is solved correctly, mimics real form */
+  .drop-zone.correct[data-target="name"]::after{content:"Ahmed";}
+  .drop-zone.correct[data-target="gpa"]::after{content:"3.75";}
+  .drop-zone.correct[data-target="add-text"]::after{content:"Add Student";font-weight:700;}
+  .drop-zone.correct[data-target="load-text"]::after{content:"Load Students";font-weight:700;}
+
+  /* ---------- FEEDBACK ---------- */
+  #feedback{
+    max-width:1240px;
+    margin:16px auto 0;
+    font-family:var(--mono);
+    font-size:13px;
+    min-height:20px;
+    color:var(--text-dim);
+  }
+  #feedback.ok{color:var(--green);}
+  #feedback.bad{color:var(--red);}
+
+  /* ---------- WIN BANNER ---------- */
+  #winBanner{
+    max-width:1240px;
+    margin:18px auto 0;
+    display:none;
+    background:linear-gradient(135deg, rgba(95,212,196,.15), rgba(126,217,156,.08));
+    border:1px solid var(--accent-dim);
+    border-radius:12px;
+    padding:18px 20px;
+    align-items:center;
+    justify-content:space-between;
+    gap:16px;
+    flex-wrap:wrap;
+  }
+  #winBanner h3{margin:0 0 4px;color:var(--accent);font-size:17px;}
+  #winBanner p{margin:0;color:var(--text-dim);font-size:13px;}
+  #winBanner button{
+    font-family:var(--sans);
+    font-weight:700;
+    font-size:13px;
+    background:var(--accent);
+    color:#10231f;
+    border:none;
+    padding:10px 18px;
+    border-radius:8px;
+    cursor:pointer;
+  }
+
+  @media (max-width: 900px){
+    .game{grid-template-columns:1fr;}
+    #codeBank, .formbody{max-height:none;}
+  }
+</style>
+</head>
+<body>
+
+<!-- ============================================================
+     HEADER BLOCK
+     ============================================================ -->
+<div class="header">
+  <div>
+    <p class="eyebrow">C# · WinForms · Drag &amp; Drop</p>
+    <h1>Match the Code to the GUI</h1>
+    <p>Drag each C# snippet onto the part of the program it builds or controls. Easy covers the core ideas; Hard covers every line in the file, including the using statements, every Controls.Add call, and both database methods.</p>
+  </div>
+  <div class="scorebox">
+    <div class="num"><span id="scoreNum">0</span>/<span id="scoreTotal">8</span></div>
+    <div class="lbl">Matched</div>
+  </div>
+</div>
+
+<!-- ============================================================
+     LEVEL SWITCH
+     Purpose: Toggle between Easy (8 pieces) and Hard (26 pieces,
+     full file coverage). Switching rebuilds both panels.
+     ============================================================ -->
+<div class="level-switch">
+  <button class="level-btn active" data-level="easy" id="btnEasy">
+    EASY <span class="sub">8 snippets · core concepts</span>
+  </button>
+  <button class="level-btn" data-level="hard" id="btnHard">
+    HARD <span class="sub">25 snippets · the whole file</span>
+  </button>
+</div>
+
+<!-- ============================================================
+     GAME GRID
+     ============================================================ -->
+<div class="game">
+
+  <!-- ---------- LEFT: CODE BANK (populated by JS) ---------- -->
+  <div>
+    <p class="panel-title"><span class="dot"></span>Code Snippets</p>
+    <div id="codeBank"></div>
+  </div>
+
+  <!-- ---------- RIGHT: MOCK GUI + STRUCTURE (populated by JS) ---------- -->
+  <div>
+    <p class="panel-title"><span class="dot"></span>Student Database System (drop targets)</p>
+    <div class="mockform">
+      <div class="titlebar"><span class="ico"></span> Student Database System</div>
+      <div class="formbody" id="formBody"></div>
+    </div>
+  </div>
+</div>
+
+<div id="feedback"></div>
+
+<div id="winBanner">
+  <div>
+    <h3 id="winTitle">All matched — the program is fully wired up.</h3>
+    <p id="winSub">You just mapped every real line of StudentForm.cs to the piece of the app it builds.</p>
+  </div>
+  <button id="resetBtn">Play Again</button>
+</div>
+
+<!-- ============================================================
+     SCRIPT BLOCK
+     Purpose: Defines both levels' data, renders cards + zones,
+     handles native HTML5 drag/drop, scoring, and reset.
+     ============================================================ -->
+<script>
+
+/* ----------------------------------------------------------------
+   LEVEL DATA
+   Each zone = { target, label(form label/section text), zoneClass,
+                 placeholder, code (HTML with span highlighting) }
+   "easy" = 8 conceptually distinct pieces (original set)
+   "hard" = 26 pieces covering literally every using statement,
+            field, property, event wire-up, Controls.Add call,
+            validation block, SQL string, try/catch block, and
+            the Program.cs entry point.
+---------------------------------------------------------------- */
+
+const LEVELS = {
+
+  easy: [
+    { target:"name", section:"Form Fields", label:"Student Name:", zoneClass:"", placeholder:'drop "txtName" snippet here',
+      code:`<span class="typ">txtName</span>.Location = <span class="kw">new</span> Point(<span class="str">150</span>, <span class="str">25</span>);\n<span class="typ">txtName</span>.Width = <span class="str">250</span>;` },
+
+    { target:"gpa", section:null, label:"GPA:", zoneClass:"", placeholder:'drop "txtGPA" snippet here',
+      code:`<span class="typ">txtGPA</span>.Location = <span class="kw">new</span> Point(<span class="str">150</span>, <span class="str">70</span>);\n<span class="typ">txtGPA</span>.Width = <span class="str">250</span>;` },
+
+    { target:"validate-name", section:"Validation", label:"Name check:", labelSub:true, zoneClass:"tall", placeholder:"drop the name-check snippet",
+      code:`<span class="kw">if</span> (txtName.Text.Trim() == <span class="str">""</span>)\n{ MessageBox.Show(<span class="str">"Please enter the student name."</span>); }` },
+
+    { target:"validate-gpa", section:null, label:"GPA check:", labelSub:true, zoneClass:"tall", placeholder:"drop the GPA-check snippet",
+      code:`<span class="kw">if</span> (!decimal.TryParse(txtGPA.Text, <span class="kw">out</span> decimal gpa))\n{ MessageBox.Show(<span class="str">"Please enter a valid GPA."</span>); }` },
+
+    { target:"add", section:"Buttons", label:null, btn:true, btnText:"Add Student", placeholder:"Add Student",
+      code:`<span class="typ">btnAdd</span>.Text = <span class="str">"Add Student"</span>;\n<span class="typ">btnAdd</span>.Click += btnAdd_Click;` },
+
+    { target:"load", section:null, label:null, btn:true, btnText:"Load Students", placeholder:"Load Students",
+      code:`<span class="typ">btnLoad</span>.Text = <span class="str">"Load Students"</span>;\n<span class="typ">btnLoad</span>.Click += btnLoad_Click;` },
+
+    { target:"grid", section:"Data Grid", label:null, zoneClass:"grid-zone", placeholder:'drop the "dgvStudents" snippet here to populate the grid',
+      code:`<span class="typ">dgvStudents</span>.Size = <span class="kw">new</span> Size(<span class="str">560</span>, <span class="str">230</span>);\n<span class="com">// fills DataGridView from SQL query</span>` },
+
+    { target:"sql", section:"Database", label:"SQL behind Add:", labelSub:true, zoneClass:"tall", placeholder:"drop the INSERT statement",
+      code:`<span class="kw">string</span> sql = <span class="str">"INSERT INTO Students (StudentName, GPA) VALUES (@name, @gpa)"</span>;` }
+  ],
+
+  hard: [
+    // ---- Program.cs entry point ----
+    { target:"usings", section:"Program.cs · Top of File", label:"using statements:", labelSub:true, zoneClass:"tall", placeholder:"drop the 5 using statements",
+      code:`<span class="kw">using</span> System;\n<span class="kw">using</span> System.Data;\n<span class="kw">using</span> System.Drawing;\n<span class="kw">using</span> System.Windows.Forms;\n<span class="kw">using</span> Microsoft.Data.SqlClient;` },
+
+    { target:"main", section:null, label:"Main() entry point:", labelSub:true, zoneClass:"tall", placeholder:"drop the [STAThread] Main() method",
+      code:`[STAThread]\n<span class="kw">static</span> <span class="kw">void</span> Main()\n{\n  ApplicationConfiguration.Initialize();\n  Application.Run(<span class="kw">new</span> StudentForm());\n}` },
+
+    // ---- Class-level fields ----
+    { target:"connstring", section:"StudentForm · Fields", label:"Connection string:", labelSub:true, zoneClass:"tall", placeholder:"drop the connectionString field",
+      code:`<span class="kw">private</span> <span class="kw">readonly</span> <span class="kw">string</span> connectionString =\n  <span class="str">@"Data Source=(localdb)\\MSSQLLocalDB;\nInitial Catalog=StudentDB;\nIntegrated Security=True;\nTrustServerCertificate=True;"</span>;` },
+
+    { target:"field-declares", section:null, label:"Control fields:", labelSub:true, zoneClass:"tall", placeholder:"drop the Label/TextBox/Button/Grid field declarations",
+      code:`<span class="kw">private</span> Label lblName = <span class="kw">new</span> Label();\n<span class="kw">private</span> Label lblGPA = <span class="kw">new</span> Label();\n<span class="kw">private</span> TextBox txtName = <span class="kw">new</span> TextBox();\n<span class="kw">private</span> TextBox txtGPA = <span class="kw">new</span> TextBox();\n<span class="kw">private</span> Button btnAdd = <span class="kw">new</span> Button();\n<span class="kw">private</span> Button btnLoad = <span class="kw">new</span> Button();\n<span class="kw">private</span> DataGridView dgvStudents = <span class="kw">new</span> DataGridView();` },
+
+    // ---- Constructor: window setup ----
+    { target:"window-props", section:"Constructor · Window Setup", label:"Window properties:", labelSub:true, zoneClass:"tall", placeholder:"drop Text / Size / StartPosition",
+      code:`Text = <span class="str">"Student Database System"</span>;\nSize = <span class="kw">new</span> Size(<span class="str">650</span>, <span class="str">480</span>);\nStartPosition = FormStartPosition.CenterScreen;` },
+
+    // ---- Labels ----
+    { target:"lbl-name", section:"Labels", label:"Student Name:", zoneClass:"", placeholder:'drop the lblName setup',
+      code:`lblName.Text = <span class="str">"Student Name:"</span>;\nlblName.Location = <span class="kw">new</span> Point(<span class="str">30</span>, <span class="str">30</span>);\nlblName.AutoSize = <span class="kw">true</span>;` },
+
+    { target:"lbl-gpa", section:null, label:"GPA:", zoneClass:"", placeholder:'drop the lblGPA setup',
+      code:`lblGPA.Text = <span class="str">"GPA:"</span>;\nlblGPA.Location = <span class="kw">new</span> Point(<span class="str">30</span>, <span class="str">75</span>);\nlblGPA.AutoSize = <span class="kw">true</span>;` },
+
+    // ---- TextBoxes ----
+    { target:"name", section:"Text Boxes", label:"Name input box:", labelSub:true, zoneClass:"", placeholder:'drop the txtName Location/Width',
+      code:`<span class="typ">txtName</span>.Location = <span class="kw">new</span> Point(<span class="str">150</span>, <span class="str">25</span>);\n<span class="typ">txtName</span>.Width = <span class="str">250</span>;` },
+
+    { target:"gpa", section:null, label:"GPA input box:", labelSub:true, zoneClass:"", placeholder:'drop the txtGPA Location/Width',
+      code:`<span class="typ">txtGPA</span>.Location = <span class="kw">new</span> Point(<span class="str">150</span>, <span class="str">70</span>);\n<span class="typ">txtGPA</span>.Width = <span class="str">250</span>;` },
+
+    // ---- Buttons ----
+    { target:"add-setup", section:"Buttons · Setup", label:null, btn:true, btnText:"Add Student", placeholder:"Add Student (Location/Width/Click wire-up)",
+      code:`btnAdd.Text = <span class="str">"Add Student"</span>;\nbtnAdd.Location = <span class="kw">new</span> Point(<span class="str">150</span>, <span class="str">115</span>);\nbtnAdd.Width = <span class="str">120</span>;\nbtnAdd.Click += btnAdd_Click;` },
+
+    { target:"load-setup", section:null, label:null, btn:true, btnText:"Load Students", placeholder:"Load Students (Location/Width/Click wire-up)",
+      code:`btnLoad.Text = <span class="str">"Load Students"</span>;\nbtnLoad.Location = <span class="kw">new</span> Point(<span class="str">280</span>, <span class="str">115</span>);\nbtnLoad.Width = <span class="str">120</span>;\nbtnLoad.Click += btnLoad_Click;` },
+
+    // ---- Grid ----
+    { target:"grid", section:"Data Grid Setup", label:null, zoneClass:"grid-zone", placeholder:"drop dgvStudents Location/Size/AutoSizeColumnsMode",
+      code:`dgvStudents.Location = <span class="kw">new</span> Point(<span class="str">30</span>, <span class="str">170</span>);\ndgvStudents.Size = <span class="kw">new</span> Size(<span class="str">560</span>, <span class="str">230</span>);\ndgvStudents.AutoSizeColumnsMode =\n  DataGridViewAutoSizeColumnsMode.Fill;` },
+
+    // ---- Controls.Add + LoadStudents call ----
+    { target:"controls-add", section:"Constructor · Wiring It Together", label:"Controls.Add calls:", labelSub:true, zoneClass:"tall", placeholder:"drop the 7 Controls.Add(...) lines",
+      code:`Controls.Add(lblName);\nControls.Add(txtName);\nControls.Add(lblGPA);\nControls.Add(txtGPA);\nControls.Add(btnAdd);\nControls.Add(btnLoad);\nControls.Add(dgvStudents);` },
+
+    { target:"ctor-load-call", section:null, label:"End of constructor:", labelSub:true, zoneClass:"", placeholder:"drop the LoadStudents() call",
+      code:`LoadStudents();  <span class="com">// runs once, on startup</span>` },
+
+    // ---- btnAdd_Click body ----
+    { target:"validate-name", section:"btnAdd_Click · Validation", label:"Name check:", labelSub:true, zoneClass:"tall", placeholder:"drop the empty-name check",
+      code:`<span class="kw">if</span> (txtName.Text.Trim() == <span class="str">""</span>)\n{\n  MessageBox.Show(<span class="str">"Please enter the student name."</span>);\n  <span class="kw">return</span>;\n}` },
+
+    { target:"validate-gpa-parse", section:null, label:"GPA parse check:", labelSub:true, zoneClass:"tall", placeholder:"drop the decimal.TryParse check",
+      code:`<span class="kw">if</span> (!decimal.TryParse(txtGPA.Text, <span class="kw">out</span> decimal gpa))\n{\n  MessageBox.Show(<span class="str">"Please enter a valid GPA number."</span>);\n  <span class="kw">return</span>;\n}` },
+
+    { target:"validate-gpa-range", section:null, label:"GPA range check:", labelSub:true, zoneClass:"tall", placeholder:"drop the 0–4 range check",
+      code:`<span class="kw">if</span> (gpa < <span class="str">0</span> || gpa > <span class="str">4</span>)\n{\n  MessageBox.Show(<span class="str">"GPA must be between 0 and 4."</span>);\n  <span class="kw">return</span>;\n}` },
+
+    { target:"sql-insert", section:"btnAdd_Click · Database Write", label:"INSERT SQL string:", labelSub:true, zoneClass:"tall", placeholder:"drop the INSERT INTO Students SQL",
+      code:`<span class="kw">string</span> sql =\n  <span class="str">"INSERT INTO Students (StudentName, GPA) "</span> +\n  <span class="str">"VALUES (@name, @gpa)"</span>;` },
+
+    { target:"sql-exec", section:null, label:"Run the INSERT:", labelSub:true, zoneClass:"tall", placeholder:"drop the SqlConnection/SqlCommand/ExecuteNonQuery block",
+      code:`<span class="kw">using</span> (SqlConnection connection = <span class="kw">new</span> SqlConnection(connectionString))\n<span class="kw">using</span> (SqlCommand command = <span class="kw">new</span> SqlCommand(sql, connection))\n{\n  command.Parameters.AddWithValue(<span class="str">"@name"</span>, txtName.Text.Trim());\n  command.Parameters.AddWithValue(<span class="str">"@gpa"</span>, gpa);\n  connection.Open();\n  <span class="kw">int</span> rowsAdded = command.ExecuteNonQuery();\n}` },
+
+    { target:"add-success", section:null, label:"On success:", labelSub:true, zoneClass:"tall", placeholder:"drop the success MessageBox + Clear + LoadStudents block",
+      code:`<span class="kw">if</span> (rowsAdded > <span class="str">0</span>)\n{\n  MessageBox.Show(<span class="str">"Student added successfully."</span>);\n  txtName.Clear();\n  txtGPA.Clear();\n  LoadStudents();\n}` },
+
+    { target:"add-catch", section:null, label:"On failure:", labelSub:true, zoneClass:"tall", placeholder:"drop the catch block for Add",
+      code:`<span class="kw">catch</span> (Exception ex)\n{\n  MessageBox.Show(<span class="str">"Database error: "</span> + ex.Message);\n}` },
+
+    // ---- btnLoad_Click ----
+    { target:"load-click-body", section:"btnLoad_Click", label:null, btn:true, btnText:"Load Students", placeholder:"Load Students → calls LoadStudents()",
+      code:`<span class="kw">private</span> <span class="kw">void</span> btnLoad_Click(<span class="kw">object</span> sender, EventArgs e)\n{\n  LoadStudents();\n}` },
+
+    // ---- LoadStudents() ----
+    { target:"sql-select", section:"LoadStudents() Method", label:"SELECT SQL string:", labelSub:true, zoneClass:"tall", placeholder:"drop the SELECT ... ORDER BY StudentID DESC SQL",
+      code:`<span class="kw">string</span> sql =\n  <span class="str">"SELECT StudentID, StudentName, GPA "</span> +\n  <span class="str">"FROM Students ORDER BY StudentID DESC"</span>;` },
+
+    { target:"adapter-fill", section:null, label:"Fill the grid:", labelSub:true, zoneClass:"grid-zone", placeholder:"drop the SqlDataAdapter / DataTable / dgvStudents.DataSource block",
+      code:`<span class="kw">using</span> (SqlConnection connection = <span class="kw">new</span> SqlConnection(connectionString))\n<span class="kw">using</span> (SqlDataAdapter adapter = <span class="kw">new</span> SqlDataAdapter(sql, connection))\n{\n  DataTable table = <span class="kw">new</span> DataTable();\n  adapter.Fill(table);\n  dgvStudents.DataSource = table;\n}` },
+
+    { target:"load-catch", section:null, label:"On failure:", labelSub:true, zoneClass:"tall", placeholder:"drop the catch block for LoadStudents",
+      code:`<span class="kw">catch</span> (Exception ex)\n{\n  MessageBox.Show(<span class="str">"Cannot load students: "</span> + ex.Message);\n}` }
+  ]
+};
+
+/* ----------------------------------------------------------------
+   RENDER + GAME LOGIC
+---------------------------------------------------------------- */
+const codeBank   = document.getElementById('codeBank');
+const formBody   = document.getElementById('formBody');
+const feedback   = document.getElementById('feedback');
+const scoreNum   = document.getElementById('scoreNum');
+const scoreTotal = document.getElementById('scoreTotal');
+const winBanner  = document.getElementById('winBanner');
+const winTitle   = document.getElementById('winTitle');
+const winSub     = document.getElementById('winSub');
+const btnEasy    = document.getElementById('btnEasy');
+const btnHard    = document.getElementById('btnHard');
+
+let currentLevel = 'easy';
+let score = 0;
+let total = 0;
+let dragged = null;
+
+function shuffle(arr){
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function buildLevel(levelKey){
+  currentLevel = levelKey;
+  const data = LEVELS[levelKey];
+  total = data.length;
+  score = 0;
+  scoreNum.textContent = 0;
+  scoreTotal.textContent = total;
+  feedback.textContent = '';
+  feedback.className = '';
+  winBanner.style.display = 'none';
+
+  winTitle.textContent = levelKey === 'hard'
+    ? `All ${total} matched — you just mapped the entire file.`
+    : `All ${total} matched — the form is wired up correctly.`;
+  winSub.textContent = levelKey === 'hard'
+    ? 'Every using statement, field, event handler, validation block, and SQL call in StudentForm.cs is now placed correctly.'
+    : 'You just mapped real WinForms properties, event handlers, and SQL to the controls they build.';
+
+  // ---- build form body (drop zones), grouped by section ----
+  formBody.innerHTML = '';
+  let lastSection = null;
+  data.forEach(item => {
+    if (item.section && item.section !== lastSection) {
+      const h = document.createElement('div');
+      h.className = 'section-label';
+      h.textContent = item.section;
+      formBody.appendChild(h);
+      lastSection = item.section;
+    }
+
+    const row = document.createElement('div');
+    row.className = 'field-row';
+
+    if (item.btn) {
+      // buttons render inline, grouped on one row per section run
+      let btnRow = formBody.lastElementChild;
+      if (!btnRow || !btnRow.classList.contains('btn-row')) {
+        btnRow = document.createElement('div');
+        btnRow.className = 'btn-row';
+        formBody.appendChild(btnRow);
+      }
+      const zone = document.createElement('div');
+      zone.className = 'drop-zone btn-zone';
+      zone.dataset.target = item.target;
+      zone.dataset.placeholder = item.placeholder;
+      zone.textContent = item.placeholder;
+      btnRow.appendChild(zone);
+      return;
+    }
+
+    if (item.label) {
+      const lbl = document.createElement('label');
+      if (item.labelSub) lbl.className = 'sub';
+      lbl.textContent = item.label;
+      row.appendChild(lbl);
+    }
+
+    const zone = document.createElement('div');
+    zone.className = 'drop-zone' + (item.zoneClass ? ' ' + item.zoneClass : '');
+    zone.dataset.target = item.target;
+    zone.dataset.placeholder = item.placeholder;
+    zone.textContent = item.placeholder;
+    row.appendChild(zone);
+
+    formBody.appendChild(row);
+  });
+
+  // ---- build code bank (draggable cards), shuffled ----
+  codeBank.innerHTML = '';
+  codeBank.classList.remove('empty');
+  shuffle(data).forEach(item => {
+    const card = document.createElement('div');
+    card.className = 'code-card';
+    card.draggable = true;
+    card.dataset.match = item.target;
+    card.innerHTML = item.code;
+    codeBank.appendChild(card);
+  });
+
+  attachCardEvents();
+  attachZoneEvents();
+}
+
+function attachCardEvents(){
+  document.querySelectorAll('.code-card').forEach(card => {
+    card.addEventListener('dragstart', e => {
+      dragged = card;
+      card.classList.add('dragging');
+      e.dataTransfer.setData('text/plain', card.dataset.match);
+    });
+    card.addEventListener('dragend', () => card.classList.remove('dragging'));
+  });
+}
+
+function attachZoneEvents(){
+  document.querySelectorAll('.drop-zone').forEach(zone => {
+    zone.addEventListener('dragover', e => {
+      e.preventDefault();
+      if (!zone.classList.contains('correct')) zone.classList.add('over');
+    });
+    zone.addEventListener('dragleave', () => zone.classList.remove('over'));
+
+    zone.addEventListener('drop', e => {
+      e.preventDefault();
+      zone.classList.remove('over');
+      if (zone.classList.contains('correct') || !dragged) return;
+
+      const matchId = e.dataTransfer.getData('text/plain');
+      const targetId = zone.dataset.target;
+
+      if (matchId === targetId) {
+        zone.classList.add('correct');
+        zone.textContent = '';
+        dragged.classList.add('placed');
+        score++;
+        scoreNum.textContent = score;
+        feedback.textContent = '✓ Correct — that snippet builds this exact piece.';
+        feedback.className = 'ok';
+        checkWin();
+      } else {
+        zone.classList.add('wrong-flash');
+        feedback.textContent = '✗ Not quite — re-read what that snippet actually does, then try again.';
+        feedback.className = 'bad';
+        setTimeout(() => zone.classList.remove('wrong-flash'), 350);
+      }
+      checkBankEmpty();
+    });
+  });
+}
+
+function checkBankEmpty(){
+  const remaining = [...document.querySelectorAll('.code-card')].some(c => !c.classList.contains('placed'));
+  codeBank.classList.toggle('empty', !remaining);
+}
+
+function checkWin(){
+  if (score === total) {
+    feedback.textContent = '';
+    winBanner.style.display = 'flex';
+  }
+}
+
+btnEasy.addEventListener('click', () => {
+  btnEasy.classList.add('active');
+  btnHard.classList.remove('active');
+  buildLevel('easy');
+});
+btnHard.addEventListener('click', () => {
+  btnHard.classList.add('active');
+  btnEasy.classList.remove('active');
+  buildLevel('hard');
+});
+document.getElementById('resetBtn').addEventListener('click', () => buildLevel(currentLevel));
+
+// initial render
+buildLevel('easy');
+</script>
+
+</body>
+</html>
